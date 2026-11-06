@@ -7,5 +7,5 @@
     <path d="M385 510 H625 A120 120 0 1 0 603 579"/>
     <path d="M715 300 V640 M715 480 Q715 390 787 390 Q855 390 855 470 V640"/>
   </g>
-  <path d="M372 588 C352 318 606 300 616 500 C626 730 842 738 812 520" fill="none" stroke="#A78BFA" stroke-width="26" stroke-linecap="round"/>
+  <path d="M236 600 L790 418" fill="none" stroke="#A78BFA" stroke-width="26" stroke-linecap="round"/>
 </svg>

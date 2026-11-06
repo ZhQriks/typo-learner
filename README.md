@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icon.svg" width="128" alt="Typo Learner icon: the word teh with a proofreader's swap mark">
+  <img src="assets/icon.svg" width="128" alt="Typo Learner icon: the word teh struck through">
 </p>
 
 <h1 align="center">Typo Learner</h1>
