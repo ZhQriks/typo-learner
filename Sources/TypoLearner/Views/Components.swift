@@ -38,6 +38,7 @@ extension LogEntry.Status {
         case .right: return "Right"
         case .wrong: return "Wrong"
         case .selfFixed: return "You fixed it"
+        case .differed: return "Different fix"
         }
     }
 
@@ -45,7 +46,7 @@ extension LogEntry.Status {
         switch self {
         case .suggested: return .orange
         case .applied, .right, .selfFixed: return .green
-        case .undone, .wrong: return .red
+        case .undone, .wrong, .differed: return .red
         }
     }
 }

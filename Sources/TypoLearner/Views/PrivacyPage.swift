@@ -13,8 +13,8 @@ struct PrivacyPage: View {
                 Card(title: "What stays on this Mac", icon: "lock.shield") {
                     fact("network.slash", "No network access. The app is sandboxed without the network permission, so it cannot send anything anywhere.")
                     fact("lock.fill", "Everything it learns is encrypted with AES-256-GCM. The key is in your login Keychain and never leaves this Mac.")
-                    fact("text.badge.xmark", "No running text is stored. Only the word you are typing and the one before it are held in memory.")
-                    fact("number", "Names and other words outside the dictionary are saved only as salted hashes.")
+                    fact("text.badge.xmark", "No running text is stored. Only the word you are typing and the two before it are held in memory.")
+                    fact("number", "It keeps word counts and which word follows which, so it can learn to predict. Your own words (names, slang) are among them, readable only inside the encrypted file. Protected words are saved as salted hashes.")
                     fact("eye.slash", "Password fields, blocked apps and Off mode are never read.")
                     Divider()
                     HStack {

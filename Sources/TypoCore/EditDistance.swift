@@ -17,6 +17,16 @@ public enum EditOp: Hashable, Sendable {
         }
     }
 
+    /// Looks like a finger slip: a neighbouring key, a swap, or a doubled or neighbouring extra letter.
+    public var isSlip: Bool {
+        switch self {
+        case let .substitute(intended, typed): return Keyboard.isAdjacent(intended, typed)
+        case .transpose: return true
+        case let .omit(_, doubled): return doubled
+        case let .insert(_, near, doubled): return near || doubled
+        }
+    }
+
     /// Per-character probability of this mistake before any personal data.
     public var prior: Double {
         switch self {

@@ -129,13 +129,89 @@ final class TypoCoreTests: XCTestCase {
         XCTAssertEqual(engine.model.totalErrors, 2)
     }
 
-    func testKeepsOnlyHashesOfUnknownWords() {
+    func testRemembersYourOwnWordsAndLeavesThemAlone() {
         let engine = makeEngine()
         let session = Session(engine: engine)
         _ = type("blorvex blorvex blorvex blorvex\n", into: session)
-        XCTAssertFalse(engine.model.userWords.keys.contains("blorvex"))
-        XCTAssertEqual(engine.model.userWords.count, 1)
+        XCTAssertEqual(engine.model.userWords["blorvex"], 4)
         XCTAssertNil(engine.suggest("blorvex", before: nil, sentenceStart: true))
+    }
+
+    func testRewordingIsNotLearnedAsATypo() {
+        let engine = makeEngine(mode: .shadow)
+        _ = type("what⌫⌫⌫⌫why ", into: Session(engine: engine))
+        XCTAssertEqual(engine.model.totalErrors, 0)
+        XCTAssertTrue(engine.model.pairs.isEmpty)
+    }
+
+    func testRealWordSwapNeedsYourOwnHistory() {
+        let engine = makeEngine()
+        XCTAssertNil(engine.suggest("form", before: "the", sentenceStart: false))
+    }
+
+    func testMissingSpace() {
+        let engine = makeEngine()
+        for (typed, expected) in ["inthe": "in the", "onthe": "on the", "tothe": "to the", "andthe": "and the"] {
+            XCTAssertEqual(engine.suggest(typed, before: nil, sentenceStart: false)?.replacement, expected, typed)
+        }
+    }
+
+    func testJudgesFixesYouMadeBeforeFinishingTheWord() {
+        let engine = makeEngine(mode: .shadow)
+        let session = Session(engine: engine)
+        _ = type("wiht⌫⌫⌫⌫with ", into: session)
+        XCTAssertEqual(engine.model.log.last?.status, .selfFixed)
+        _ = type("teh⌫⌫⌫ten ", into: session)
+        XCTAssertEqual(engine.model.log.last?.status, .differed)
+        let day = engine.model.days.values.reduce(DayStat(), +)
+        XCTAssertEqual(day.selfFixed, 1)
+        XCTAssertEqual(day.differed, 1)
+        XCTAssertEqual(day.judged, 2)
+    }
+
+    func testUnmarkTakesBackWhatAMarkTaught() throws {
+        let engine = makeEngine(mode: .shadow)
+        _ = type("teh ", into: Session(engine: engine))
+        let id = try XCTUnwrap(engine.model.log.last?.id)
+        let before = engine.suggest("teh", before: nil, sentenceStart: true)?.confidence ?? 0
+        engine.mark(id, right: false)
+        XCTAssertLessThan(engine.suggest("teh", before: nil, sentenceStart: true)?.confidence ?? 0, before)
+        engine.unmark(id)
+        XCTAssertEqual(engine.model.log.last?.status, .suggested)
+        XCTAssertEqual(engine.model.days.values.reduce(DayStat(), +).markedWrong, 0)
+        XCTAssertEqual(engine.suggest("teh", before: nil, sentenceStart: true)?.confidence ?? 0, before, accuracy: 1e-9)
+    }
+
+    func testLearnsPhrasesAndScoresPredictionsSilently() {
+        let engine = makeEngine(mode: .shadow)
+        let session = Session(engine: engine)
+        _ = type(String(repeating: "see you soon. ", count: 5), into: session)
+        XCTAssertEqual(engine.predictNext(after: ["see", "you"], limit: 3).first, "soon")
+        XCTAssertEqual(engine.predictNext(after: [NGrams.start], limit: 3).first, "see")
+        let day = engine.model.days.values.reduce(DayStat(), +)
+        XCTAssertGreaterThan(day.predicted, 0)
+        XCTAssertGreaterThan(day.nextTop1, 0)
+        XCTAssertGreaterThan(day.letters, 0)
+    }
+
+    func testNgramsStayUnderTheirLimit() {
+        var grams = NGrams()
+        for i in 0..<100 { grams.add("a", "w\(i)", count: i % 3 + 1, limit: 40) }
+        XCTAssertLessThanOrEqual(grams.entries, 40)
+        XCTAssertEqual(grams.followers("a").count, grams.entries)
+    }
+
+    /// Files written before n-grams and readable words must open without losing anything.
+    func testDecodesVersionOneFiles() throws {
+        let json = #"{"version":1,"salt":"AAAAAAAAAAAAAAAAAAAAAA==","bigrams":{"of the":3},"userWords":{"deadbeef":2},"unigrams":{"the":9},"days":{"2026-11-01":{"words":5,"selfFixed":1}}}"#
+        let model = try JSONDecoder().decode(LearnedModel.self, from: Data(json.utf8))
+        XCTAssertEqual(model.version, 2)
+        XCTAssertEqual(model.ngrams.count("of", "the"), 3)
+        XCTAssertEqual(model.legacyUserWordHashes["deadbeef"], 2)
+        XCTAssertTrue(model.userWords.isEmpty)
+        XCTAssertEqual(model.unigrams["the"], 9)
+        XCTAssertEqual(model.days["2026-11-01"]?.words, 5)
+        XCTAssertEqual(model.days["2026-11-01"]?.differed, 0)
     }
 
     func testModelRoundTripsThroughCodable() throws {

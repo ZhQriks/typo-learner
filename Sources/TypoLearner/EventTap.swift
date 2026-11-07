@@ -75,7 +75,8 @@ enum KeyMapper {
         if flags.contains(.maskCommand) || flags.contains(.maskControl) { return .reset }
 
         switch code {
-        case kVK_Delete: return .backspace
+        // Option-Delete removes a whole word, which a one-letter backspace would misread.
+        case kVK_Delete: return flags.contains(.maskAlternate) ? .reset : .backspace
         case kVK_Return, kVK_ANSI_KeypadEnter, kVK_Tab: return .lineBreak
         case kVK_Escape, kVK_ForwardDelete, kVK_Home, kVK_End, kVK_PageUp, kVK_PageDown,
              kVK_LeftArrow, kVK_RightArrow, kVK_UpArrow, kVK_DownArrow:

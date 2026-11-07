@@ -56,6 +56,8 @@ struct DashboardView: View {
 
 struct OverviewPage: View {
     @Environment(AppModel.self) private var model
+    /// Slider position while dragging; saved once on release, so dragging does not redraw everything.
+    @State private var threshold: Double?
 
     private var s: Snapshot { model.snapshot }
 
@@ -79,6 +81,7 @@ struct OverviewPage: View {
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 confidence
+                prediction
                 performance
             }
             .padding(24)
@@ -101,7 +104,7 @@ struct OverviewPage: View {
                         Text("Readiness for Active: \(min(judged, 30)) of 30 judged suggestions, needs 95% right")
                             .font(.callout)
                     }
-                    Text("Suggestions get judged when you fix the typo yourself, or when you mark them in Activity.")
+                    Text("Suggestions get judged when you fix a typo yourself, even before finishing the word, or when you mark them in Activity.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -172,7 +175,7 @@ struct OverviewPage: View {
         Card(title: "Confidence needed", icon: "gauge.with.dots.needle.33percent") {
             HStack {
                 Slider(
-                    value: Binding(get: { s.settings.threshold }, set: { model.setThreshold(($0 * 100).rounded() / 100) }),
+                    value: Binding(get: { threshold ?? s.settings.threshold }, set: { threshold = ($0 * 100).rounded() / 100 }),
                     in: 0.80...0.99
                 ) {
                     Text("Confidence needed")
@@ -180,13 +183,31 @@ struct OverviewPage: View {
                     Text("80%")
                 } maximumValueLabel: {
                     Text("99%")
+                } onEditingChanged: { editing in
+                    guard !editing, let threshold else { return }
+                    model.setThreshold(threshold)
+                    self.threshold = nil
                 }
                 .labelsHidden()
-                Text(percent(s.settings.threshold))
+                Text(percent(threshold ?? s.settings.threshold))
                     .font(.title3.monospacedDigit().weight(.semibold))
                     .frame(width: 56, alignment: .trailing)
             }
-            Text("Higher means fewer fixes and fewer wrong ones. Swapping one real word for another always needs 99%.")
+            Text("Higher means fewer fixes and fewer wrong ones. One real word is swapped for another only when you have made that swap yourself twice, and it needs 99%.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var prediction: some View {
+        let t = s.total
+        func rate(_ part: Int, _ whole: Int) -> Double? { whole > 0 ? Double(part) / Double(whole) : nil }
+        return Card(title: "Word prediction (silent test)", icon: "text.cursor") {
+            HStack(alignment: .top) {
+                StatTile(value: percent(rate(t.nextTop3, t.predicted)), label: "Next word in its top 3")
+                StatTile(value: percent(rate(t.nextTop1, t.predicted)), label: "Next word exactly")
+                StatTile(value: percent(rate(t.completionSaved, t.letters)), label: "Letters completion would save")
+            }
+            Text("Nothing is shown or typed yet. At every word it guesses quietly from your own phrases and counts how often it would have been right, so you can see when prediction is worth turning on.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

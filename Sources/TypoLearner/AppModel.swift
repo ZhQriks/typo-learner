@@ -199,6 +199,7 @@ final class AppModel {
     }
 
     func setThreshold(_ threshold: Double) {
+        guard threshold != snapshot.settings.threshold else { return }
         core?.updateSettings { $0.threshold = threshold }
         refresh()
     }
@@ -215,6 +216,11 @@ final class AppModel {
 
     func mark(_ id: UUID, right: Bool) {
         core?.with { $0.mark(id, right: right) }
+        refresh()
+    }
+
+    func unmark(_ id: UUID) {
+        core?.with { $0.unmark(id) }
         refresh()
     }
 

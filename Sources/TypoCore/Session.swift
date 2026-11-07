@@ -18,8 +18,8 @@ public struct Replacement: Equatable, Sendable {
     public let text: String
 }
 
-/// Follows the word being typed and the one before it, and decides what to learn and fix.
-/// These two words are the only text ever held; older text is dropped as soon as it leaves.
+/// Follows the word being typed and the two before it, and decides what to learn and fix.
+/// These words are the only text ever held; older text is dropped as soon as it leaves.
 public final class Session {
     public let engine: Engine
     static let correctingSeparators: Set<Character> = [" ", ",", ".", "!", "?", ";", ":"]
@@ -30,6 +30,8 @@ public final class Session {
         var trailing: String
         var before: String?
         var sentenceStart: Bool
+        /// Up to two words before this one, oldest first, or `NGrams.start` at a sentence start.
+        var context: [String]
         var correction: (original: String, replacement: String)?
         var suggestion: String?
         var logID: UUID?
@@ -44,6 +46,8 @@ public final class Session {
     /// The word was just restored by undo; leave it alone.
     private var restored = false
     private var justCorrected = false
+    /// Return was the last thing pressed, so the next word starts a line.
+    private var atLineStart = false
 
     public init(engine: Engine) {
         self.engine = engine
@@ -63,6 +67,7 @@ public final class Session {
         case .lineBreak:
             _ = finishWord(separator: "\n")
             commitAll()
+            atLineStart = true
         case .backspace:
             return backspace()
         case .reset:
@@ -96,42 +101,54 @@ public final class Session {
         }
         let text = current
         let edited = snapshot != nil || reopened != nil || restored
+
+        let before: String?
+        let sentenceStart: Bool
+        let context: [String]
+        if let reopened {
+            before = reopened.before
+            sentenceStart = reopened.sentenceStart
+            context = reopened.context
+        } else if let previous {
+            before = previous.trailing.allSatisfy { $0 == " " || $0 == "," } ? previous.text : nil
+            sentenceStart = previous.trailing.contains { ".!?\n".contains($0) }
+            context = sentenceStart ? [NGrams.start] : before.map { Array((previous.context + [$0]).suffix(2)) } ?? []
+            engine.commit(previous.text, context: previous.context)
+        } else {
+            before = nil
+            sentenceStart = atLineStart
+            context = atLineStart ? [NGrams.start] : []
+        }
+        atLineStart = false
+
         if let reopened {
             learnFromReopened(reopened, final: text)
         } else if let snapshot {
             // As long as the final word means you had typed all of it ("wiht" → "with"), it is a whole-word fix.
-            engine.learnEdit(typed: snapshot, final: text, wholeWord: snapshot.count >= text.count)
+            let wholeWord = snapshot.count >= text.count
+            if wholeWord {
+                // Judge what it would have done, before the fix teaches it anything.
+                engine.judgeOwnFix(typed: snapshot, final: text, before: before, sentenceStart: sentenceStart)
+            }
+            engine.learnEdit(typed: snapshot, final: text, wholeWord: wholeWord)
         }
-
-        let before: String?
-        let sentenceStart: Bool
-        if let reopened {
-            before = reopened.before
-            sentenceStart = reopened.sentenceStart
-        } else if let previous {
-            before = previous.trailing.allSatisfy { $0 == " " || $0 == "," } ? previous.text : nil
-            sentenceStart = previous.trailing.contains { ".!?\n".contains($0) }
-            engine.commit(previous.text, before: previous.before)
-        } else {
-            before = nil
-            sentenceStart = false
-        }
+        // A reopened or restored word was already scored the first time round.
+        if reopened == nil, !restored { engine.scorePrediction(of: text, context: context) }
         engine.noteWordTyped(text)
         current = ""
         snapshot = nil
         reopened = nil
         restored = false
 
-        var word = Word(text: text, trailing: String(separator), before: before, sentenceStart: sentenceStart)
+        var word = Word(
+            text: text, trailing: String(separator), before: before, sentenceStart: sentenceStart, context: context
+        )
         previous = word
         guard !edited, Self.correctingSeparators.contains(separator),
-              let suggestion = engine.suggest(text, before: before, sentenceStart: sentenceStart) else { return nil }
-        let settings = engine.model.settings
-        // Replacing one real word with another needs near certainty.
-        let required = suggestion.typedIsWord ? max(settings.threshold, 0.99) : settings.threshold
-        guard suggestion.confidence >= required else { return nil }
+              let suggestion = engine.suggest(text, before: before, sentenceStart: sentenceStart),
+              engine.clears(suggestion) else { return nil }
 
-        if settings.mode == .shadow {
+        if engine.model.settings.mode == .shadow {
             word.suggestion = suggestion.replacement
             word.logID = engine.log(suggestion, before: before, status: .suggested)
             previous = word
@@ -154,8 +171,14 @@ public final class Session {
                 engine.learnEdit(typed: correction.original, final: final, wholeWord: true)
             }
         } else if final != word.text {
+            if let suggestion = word.suggestion {
+                if final == suggestion {
+                    engine.recordSelfFix(logID: word.logID)
+                } else if engine.isFix(word.text, final) {
+                    engine.recordDiffered(logID: word.logID)
+                }
+            }
             engine.learnEdit(typed: word.text, final: final, wholeWord: true)
-            if final == word.suggestion { engine.recordSelfFix(logID: word.logID) }
         }
     }
 
@@ -189,7 +212,7 @@ public final class Session {
     }
 
     private func commitAll() {
-        if let previous { engine.commit(previous.text, before: previous.before) }
+        if let previous { engine.commit(previous.text, context: previous.context) }
         forget()
     }
 
@@ -200,5 +223,6 @@ public final class Session {
         reopened = nil
         restored = false
         justCorrected = false
+        atLineStart = false
     }
 }

@@ -10,7 +10,7 @@ struct LearnedPage: View {
             HStack(spacing: 12) {
                 Card { StatTile(value: s.pairs.count.formatted(), label: "Typo pairs seen", caption: "top 100 shown") }
                 Card { StatTile(value: s.vocabulary.formatted(), label: "Dictionary words you use") }
-                Card { StatTile(value: s.yourWords.formatted(), label: "Your own words", caption: "names, slang; hashed") }
+                Card { StatTile(value: s.yourWords.formatted(), label: "Your own words", caption: "names, slang") }
                 Card { StatTile(value: s.protectedCount.formatted(), label: "Protected words") }
             }
             .fixedSize(horizontal: false, vertical: true)

@@ -10,7 +10,7 @@ struct ActivityPage: View {
             case .all: return true
             case .review: return status == .suggested
             case .fixed: return [.applied, .right, .selfFixed].contains(status)
-            case .rejected: return [.undone, .wrong].contains(status)
+            case .rejected: return [.undone, .wrong, .differed].contains(status)
             }
         }
     }
@@ -75,6 +75,11 @@ struct ActivityRow: View {
                     Label("Wrong", systemImage: "xmark")
                 }
                 .help("This fix was wrong. It will not happen again.")
+            } else if [.right, .wrong, .undone].contains(entry.status) {
+                Button { model.unmark(entry.id) } label: {
+                    Label("Undo", systemImage: "arrow.uturn.backward")
+                }
+                .help("Take this back, and everything it taught")
             }
         }
         .controlSize(.small)

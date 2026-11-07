@@ -73,7 +73,7 @@ extension Engine {
         s.totalChars = model.totalChars
         s.totalErrors = model.totalErrors
         s.vocabulary = model.unigrams.count
-        s.yourWords = model.userWords.count
+        s.yourWords = model.userWords.count + model.legacyUserWordHashes.count
         s.protectedCount = model.protectedWords.count
         return s
     }

@@ -41,6 +41,7 @@ final class Core: @unchecked Sendable {
         with { _ in
             frontmost = bundleID
             session.reset()
+            session.engine.app = bundleID
         }
     }
 
